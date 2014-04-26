@@ -24,7 +24,7 @@ setwd("/Users/alexstephens/Development/kaggle/meg/data")
 matlab.path  <- "/Users/alexstephens/Development/kaggle/meg/data"
 matlab.files <- dir(, pattern=".mat")
 
-for (i in 1:length(matlab.files)) {
+for (i in 13:length(matlab.files)) {
     
     tmp.file <- matlab.files[i]
     tmp.out  <- gsub(".mat", ".Rdata", tmp.file)
