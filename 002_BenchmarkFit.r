@@ -6,6 +6,14 @@
 ## Load libraries
 ##------------------------------------------------------------------
 library(caret)
+library(foreach)
+library(doMC)
+library(plyr)
+
+##------------------------------------------------------------------
+## register cores
+##------------------------------------------------------------------
+registerDoMC(4)
 
 ##------------------------------------------------------------------
 ## Clear the workspace
@@ -41,10 +49,48 @@ bench.path  <- "/Users/alexstephens/Development/kaggle/meg/data/benchmark"
 ##------------------------------------------------------------------
 
 ## grab the subject raw data files
-data.files  <- dir(,pattern=".Rdata")
+data.files   <- dir(,pattern="*.Rdata")
+
+
+## loop over each subject and summarize the files
+for (j in 1:length(data.files)) {
+
+    ## load the data file (loaded object == "rawdata")
+    load( data.files[j] )
+
+    ## summarize the data cube
+    if (j == 1) {
+        data.summary <- data.frame( file=data.files[j],
+        tmin=rawdata$tmin,
+        tmax=rawdata$tmax,
+        sfreq=rawdata$sfreq,
+        ntrial=dim(rawdata$X)[1],
+        nchannels=dim(rawdata$X)[2],
+        nobs=dim(rawdata$X)[3],
+        nhit=sum(rawdata$y))
+    } else {
+        data.summary <- rbind(data.summary,
+        data.frame( file=data.files[j],
+        tmin=rawdata$tmin,
+        tmax=rawdata$tmax,
+        sfreq=rawdata$sfreq,
+        ntrial=dim(rawdata$X)[1],
+        nchannels=dim(rawdata$X)[2],
+        nobs=dim(rawdata$X)[3],
+        nhit=sum(rawdata$y)))
+    }
+}
+
+
+
+
+## grab the subject raw data files
+data.files   <- dir(,pattern="train_")
+
 
 ## loop over each subject and create a benchmark dataset
-for (j in 1:length(data.files)) {
+#for (j in 1:length(data.files)) {
+for (j in 1:1) {
     
     ## load the data file (loaded object == "rawdata")
     load( data.files[j] )
@@ -53,7 +99,7 @@ for (j in 1:length(data.files)) {
     test.num    <- dim(rawdata$X)[1]
     channel.num <- dim(rawdata$X)[2]
     obs.num     <- dim(rawdata$X)[3]
-    
+   
     ## create a time sequence [-0.5, +1.0]
     t.vec       <- seq(from=rawdata$tmin, to=rawdata$tmax, length.out=obs.num)
     
@@ -66,10 +112,41 @@ for (j in 1:length(data.files)) {
     ## observations.  Format should be {Channel1(start,stop), Channel2(start,stop), ... }
     
     ## pre-allocate a matrix
+    subject.y   <- as.vector(rawdata$y)
     subject.mat <- matrix(NA, nrow=test.num, ncol=(((stim.hi - stim.lo + 1)*channel.num)))
     
+    ## load the data into a matrix
     for (i in 1:test.num) {
         subject.mat[i,]  <- as.vector( t(rawdata$X[i,,stim.lo:stim.hi]) )
     }
+    colnames(subject.mat) <- paste("x",1:ncol(subject.mat),sep="")
+    
+    ## find highly-correlated predictors
+    #high.rho <- findCorrelation(subject.mat, cutoff = 0.75)
+    
+    ## pre-process the data
+    preproc     <- preProcess(subject.mat, method=c("center", "scale"))
+    subject.pp  <- predict(preproc, newdata=subject.mat)
+    
+    ## set-up the fit parameters
+    ctrl    <- trainControl(method="cv", number=6)
+
+    ## repeat the single-subject experimenal results
+    tmp.fit <- train(   x=subject.pp,
+                        y=as.factor(subject.y),
+                        method="plr",
+                        trControl=ctrl)
+                        
+    #training <- predict(preProc, bbbDescr[1:100,-3])
+    #test     <- predict(preProc, bbbDescr[101:208,-3])
 
 }
+
+
+
+
+
+
+
+
+
